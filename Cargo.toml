@@ -1,0 +1,31 @@
+[package]
+edition = "2021"
+name = "arena-container"
+version = "0.0.1"
+rust-version = "1.91"
+authors = ["warlock <internalmike@gmail.com>"]
+description = "Simple weak-typed arena (freelist) container without guards."
+readme = "README.md"
+documentation = "https://docs.rs/arena-container/"
+keywords = ["freelist", "arena", "tree", "graph", "entity"]
+categories = ["rust-patterns", "no-std"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/A1-Triard/arena-container"
+
+[features]
+default = ["nightly"]
+## disable to make the library compatible with stable and beta Rust channels.
+nightly = ["composable-allocators", "const-default"]
+
+[dependencies]
+composable-allocators = { version = "0.3.5", optional = true }
+const-default = { version = "1.0.0", optional = true }
+document-features = "0.2.7"
+either = { version = "1.6.1", default-features = false }
+
+[dev-dependencies]
+quickcheck = "1.0.3"
+quickcheck_macros = "1.0.0"
+
+[badges]
+maintenance = { status = "actively-developed" }
