@@ -1,7 +1,7 @@
 extern crate alloc as alloc_crate;
 
 use alloc_crate::alloc::Allocator;
-use alloc_crate::collections::TryReserveError;
+use alloc_crate::collections::{TryReserveError, TryReserveErrorKind};
 use alloc_crate::vec::{self, Vec};
 use composable_allocators::Global as Global;
 use const_default::ConstDefault;
@@ -686,10 +686,11 @@ impl<I: ArenaIndex, T, A: Allocator> Arena<I, T, A> {
     ///
     /// # Panics
     ///
-    /// Panics if the new capacity overflows usize.
+    /// Panics if the required capacity overflows maximum index value + 1.
     pub fn reserve(&mut self) {
         if self.items().len_equals_to_min_capacity() {
             self.items_mut().reserve(1);
+            assert!(I::try_from_usize(self.items().min_capacity()).is_some());
         }
     }
 
@@ -703,10 +704,11 @@ impl<I: ArenaIndex, T, A: Allocator> Arena<I, T, A> {
     ///
     /// # Panics
     ///
-    /// Panics if the new capacity overflows usize.
+    /// Panics if the required capacity overflows maximum index value + 1.
     pub fn reserve_exact(&mut self) {
         if self.items().len_equals_to_min_capacity() {
             self.items_mut().reserve_exact(1);
+            assert!(I::try_from_usize(self.items().min_capacity()).is_some());
         }
     }
 
@@ -720,7 +722,9 @@ impl<I: ArenaIndex, T, A: Allocator> Arena<I, T, A> {
     /// If the capacity overflows, or the allocator reports a failure, then an error is returned.
     pub fn try_reserve(&mut self) -> Result<(), TryReserveError> {
         if self.items().len_equals_to_min_capacity() {
-            self.items_mut().try_reserve(1)
+            self.items_mut().try_reserve(1)?;
+            I::try_from_usize(self.items().min_capacity())
+                .ok_or(TryReserveError::from(TryReserveErrorKind::CapacityOverflow)).map(|_| ())
         } else {
             Ok(())
         }
@@ -740,7 +744,9 @@ impl<I: ArenaIndex, T, A: Allocator> Arena<I, T, A> {
     /// If the capacity overflows, or the allocator reports a failure, then an error is returned.
     pub fn try_reserve_exact(&mut self) -> Result<(), TryReserveError> {
         if self.items().len_equals_to_min_capacity() {
-            self.items_mut().try_reserve_exact(1)
+            self.items_mut().try_reserve_exact(1)?;
+            I::try_from_usize(self.items().min_capacity())
+                .ok_or(TryReserveError::from(TryReserveErrorKind::CapacityOverflow)).map(|_| ())
         } else {
             Ok(())
         }
@@ -871,5 +877,13 @@ mod test {
             TEST_DROP.store(-1, Ordering::SeqCst);
         }
         assert_eq!(TEST_DROP.load(Ordering::SeqCst), 7);
+    }
+
+    #[test]
+    fn try_reserve() {
+        let mut arena: Arena<i8, ()> = Arena::new();
+        while arena.try_reserve().is_ok() {
+            arena.insert(|_| ((), ()));
+        }
     }
 }

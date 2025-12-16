@@ -1,5 +1,6 @@
 #![cfg_attr(feature="nightly", feature(allocator_api))]
 #![cfg_attr(feature="nightly", feature(associated_type_defaults))]
+#![cfg_attr(feature="nightly", feature(try_reserve_kind))]
 
 #![deny(warnings)]
 #![doc(test(attr(deny(warnings))))]
