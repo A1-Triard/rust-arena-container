@@ -1,10 +1,7 @@
 extern crate alloc as alloc_crate;
 
-use alloc_crate::alloc::Allocator;
-use alloc_crate::collections::{TryReserveError, TryReserveErrorKind};
+use alloc_crate::collections::TryReserveError;
 use alloc_crate::vec::{self, Vec};
-use composable_allocators::Global as Global;
-use const_default::ConstDefault;
 use core::fmt::Debug;
 use core::hint::unreachable_unchecked;
 use core::iter::{self, FusedIterator};
@@ -21,12 +18,12 @@ type ArenaItem<I, T> = Either<<I as ArenaIndex>::Optional, T>;
 /// While [`Arena`] itself is unique (i.e. non-clonable) object,
 /// arena ['items'](Arena::items) could be cloned.
 #[derive(Debug, Clone)]
-pub struct ArenaItems<I: ArenaIndex, T, A: Allocator = Global> {
-    vec: Vec<ArenaItem<I, T>, A>,
+pub struct ArenaItems<I: ArenaIndex, T> {
+    vec: Vec<ArenaItem<I, T>>,
     vacancy: I::Optional,
 }
 
-impl<I: ArenaIndex, T, A: Allocator> ArenaItems<I, T, A> {
+impl<I: ArenaIndex, T> ArenaItems<I, T> {
     /// An amount of memory required to hold one component.
     ///
     /// This information can be useful for memory management fine-tuning.
@@ -41,22 +38,19 @@ impl<I: ArenaIndex, T, A: Allocator> ArenaItems<I, T, A> {
         align_of::<ArenaItem<I, T>>()
     }
 
-    const fn new_in(alloc: A) -> Self {
+    const fn new() -> Self {
         ArenaItems {
-            vec: Vec::new_in(alloc),
+            vec: Vec::new(),
             vacancy: I::NONE
         }
     }
 
-    fn with_capacity_in(capacity: usize, alloc: A) -> Self {
+    fn with_capacity(capacity: usize) -> Self {
         ArenaItems {
-            vec: Vec::with_capacity_in(capacity, alloc),
+            vec: Vec::with_capacity(capacity),
             vacancy: I::NONE
         }
     }
-
-    /// Returns a reference to the underlying allocator.
-    pub fn allocator(&self) -> &A { self.vec.allocator() }
 
     /// Returns the number of elements the arena can hold without reallocating.
     pub fn capacity(&self) -> usize { self.vec.capacity() }
@@ -226,12 +220,12 @@ impl<I: ArenaIndex, T, A: Allocator> ArenaItems<I, T, A> {
     }
 
     /// Transforms the container into an iterator over all occupied indices.
-    pub fn into_indices(self) -> ArenaItemsIntoIndices<I, T, A> {
+    pub fn into_indices(self) -> ArenaItemsIntoIndices<I, T> {
         ArenaItemsIntoIndices(self.vec.into_iter().enumerate())
     }
 
     /// Transforms the container into an iterator over all items.
-    pub fn into_values(self) -> ArenaItemsIntoValues<I, T, A> {
+    pub fn into_values(self) -> ArenaItemsIntoValues<I, T> {
         ArenaItemsIntoValues(self.vec.into_iter())
     }
 }
@@ -444,11 +438,11 @@ impl<'a, I: ArenaIndex, T> FusedIterator for ArenaItemsValuesMut<'a, I, T> { }
 ///
 /// Usually created by the [`ArenaItems::into_indices`](ArenaItems::into_indices) method.
 #[derive(Debug)]
-pub struct ArenaItemsIntoIndices<I: ArenaIndex, T, A: Allocator = Global>(
-    iter::Enumerate<vec::IntoIter<Either<I::Optional, T>, A>>,
+pub struct ArenaItemsIntoIndices<I: ArenaIndex, T>(
+    iter::Enumerate<vec::IntoIter<Either<I::Optional, T>>>,
 );
 
-impl<I: ArenaIndex, T, A: Allocator> Iterator for ArenaItemsIntoIndices<I, T, A> {
+impl<I: ArenaIndex, T> Iterator for ArenaItemsIntoIndices<I, T> {
     type Item = I;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -466,7 +460,7 @@ impl<I: ArenaIndex, T, A: Allocator> Iterator for ArenaItemsIntoIndices<I, T, A>
     }
 }
 
-impl<I: ArenaIndex, T, A: Allocator> DoubleEndedIterator for ArenaItemsIntoIndices<I, T, A> {
+impl<I: ArenaIndex, T> DoubleEndedIterator for ArenaItemsIntoIndices<I, T> {
     fn next_back(&mut self) -> Option<Self::Item> {
         loop {
             match self.0.next_back() {
@@ -478,17 +472,17 @@ impl<I: ArenaIndex, T, A: Allocator> DoubleEndedIterator for ArenaItemsIntoIndic
     }
 }
 
-impl<I: ArenaIndex, T, A: Allocator> FusedIterator for ArenaItemsIntoIndices<I, T, A> { }
+impl<I: ArenaIndex, T> FusedIterator for ArenaItemsIntoIndices<I, T> { }
 
 /// An iterator over all items.
 ///
 /// Usually created by the [`ArenaItems::into_values`](ArenaItems::into_values) method.
 #[derive(Debug)]
-pub struct ArenaItemsIntoValues<I: ArenaIndex, T, A: Allocator = Global>(
-    vec::IntoIter<Either<I::Optional, T>, A>,
+pub struct ArenaItemsIntoValues<I: ArenaIndex, T>(
+    vec::IntoIter<Either<I::Optional, T>>,
 );
 
-impl<I: ArenaIndex, T, A: Allocator> Iterator for ArenaItemsIntoValues<I, T, A> {
+impl<I: ArenaIndex, T> Iterator for ArenaItemsIntoValues<I, T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -506,7 +500,7 @@ impl<I: ArenaIndex, T, A: Allocator> Iterator for ArenaItemsIntoValues<I, T, A> 
     }
 }
 
-impl<I: ArenaIndex, T, A: Allocator> DoubleEndedIterator for ArenaItemsIntoValues<I, T, A> {
+impl<I: ArenaIndex, T> DoubleEndedIterator for ArenaItemsIntoValues<I, T> {
     fn next_back(&mut self) -> Option<Self::Item> {
         loop {
             match self.0.next_back() {
@@ -518,17 +512,17 @@ impl<I: ArenaIndex, T, A: Allocator> DoubleEndedIterator for ArenaItemsIntoValue
     }
 }
 
-impl<I: ArenaIndex, T, A: Allocator> FusedIterator for ArenaItemsIntoValues<I, T, A> { }
+impl<I: ArenaIndex, T> FusedIterator for ArenaItemsIntoValues<I, T> { }
 
 /// An iterator over all items combined with their ids.
 ///
 /// Usually created by the [`ArenaItems::into_iter`](ArenaItems::into_iter) method.
 #[derive(Debug, Clone)]
-pub struct ArenaItemsIntoIter<I: ArenaIndex, T, A: Allocator = Global>(
-    iter::Enumerate<vec::IntoIter<Either<I::Optional, T>, A>>,
+pub struct ArenaItemsIntoIter<I: ArenaIndex, T>(
+    iter::Enumerate<vec::IntoIter<Either<I::Optional, T>>>,
 );
 
-impl<I: ArenaIndex, T, A: Allocator> Iterator for ArenaItemsIntoIter<I, T, A> {
+impl<I: ArenaIndex, T> Iterator for ArenaItemsIntoIter<I, T> {
     type Item = (I, T);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -547,7 +541,7 @@ impl<I: ArenaIndex, T, A: Allocator> Iterator for ArenaItemsIntoIter<I, T, A> {
     }
 }
 
-impl<I: ArenaIndex, T, A: Allocator> DoubleEndedIterator for ArenaItemsIntoIter<I, T, A> {
+impl<I: ArenaIndex, T> DoubleEndedIterator for ArenaItemsIntoIter<I, T> {
     fn next_back(&mut self) -> Option<Self::Item> {
         loop {
             match self.0.next_back() {
@@ -560,18 +554,18 @@ impl<I: ArenaIndex, T, A: Allocator> DoubleEndedIterator for ArenaItemsIntoIter<
     }
 }
 
-impl<I: ArenaIndex, T, A: Allocator> FusedIterator for ArenaItemsIntoIter<I, T, A> { }
+impl<I: ArenaIndex, T> FusedIterator for ArenaItemsIntoIter<I, T> { }
 
-impl<I: ArenaIndex, T, A: Allocator> IntoIterator for ArenaItems<I, T, A> {
+impl<I: ArenaIndex, T> IntoIterator for ArenaItems<I, T> {
     type Item = (I, T);
-    type IntoIter = ArenaItemsIntoIter<I, T, A>;
+    type IntoIter = ArenaItemsIntoIter<I, T>;
 
     fn into_iter(self) -> Self::IntoIter {
         ArenaItemsIntoIter(self.vec.into_iter().enumerate())
     }
 }
 
-impl<'a, I: ArenaIndex, T, A: Allocator> IntoIterator for &'a ArenaItems<I, T, A> {
+impl<'a, I: ArenaIndex, T> IntoIterator for &'a ArenaItems<I, T> {
     type Item = (I, &'a T);
     type IntoIter = ArenaItemsIter<'a, I, T>;
 
@@ -632,52 +626,42 @@ use forgettable_field::*;
 
 /// Unordered container with random access.
 #[derive(Debug)]
-pub struct Arena<I: ArenaIndex, T: 'static, A: Allocator = Global> {
-    items: ForgettableField<ArenaItems<I, T, A>>,
+pub struct Arena<I: ArenaIndex, T: 'static> {
+    items: ForgettableField<ArenaItems<I, T>>,
 }
 
-impl<I: ArenaIndex, T, A: Allocator> Arena<I, T, A> {
+impl<I: ArenaIndex, T> Arena<I, T> {
     /// Creates an arena instance.
-    pub const fn new() -> Self where A: ConstDefault {
-        Self::new_in(ConstDefault::DEFAULT)
-    }
-
-    /// Creates an arena instance with the specified initial capacity.
-    pub fn with_capacity(capacity: usize) -> Self where A: ConstDefault {
-        Self::with_capacity_in(capacity, ConstDefault::DEFAULT)
-    }
-
-    /// Creates an arena instance.
-    pub const fn new_in(alloc: A) -> Self {
+    pub const fn new() -> Self {
         Arena {
-            items: ForgettableField::new(ArenaItems::new_in(alloc))
+            items: ForgettableField::new(ArenaItems::new())
         }
     }
 
     /// Creates an arena instance with the specified initial capacity.
-    pub fn with_capacity_in(capacity: usize, alloc: A) -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
         Arena {
-            items: ForgettableField::new(ArenaItems::with_capacity_in(capacity, alloc))
+            items: ForgettableField::new(ArenaItems::with_capacity(capacity))
         }
     }
 
     /// Returns contained items packed in a special container.
     /// While arena itself is unique (i.e. non-clonable) object,
     /// this special container could be cloned.
-    pub fn into_items(#[allow(unused_mut)] mut self) -> ArenaItems<I, T, A> {
+    pub fn into_items(#[allow(unused_mut)] mut self) -> ArenaItems<I, T> {
         ForgettableField::take_and_forget(self, |x| &mut x.items)
     }
 
     /// Returns reference to contained items packed in a special container.
     /// While arena itself is unique (i.e. non-clonable) object,
     /// this special container could be cloned.
-    pub fn items(&self) -> &ArenaItems<I, T, A> { &self.items }
+    pub fn items(&self) -> &ArenaItems<I, T> { &self.items }
 
     /// Returns mutable reference to contained items packed in
     /// a (mostly read-only) special container.
     /// While arena itself is unique (i.e. non-clonable) object,
     /// this special container could be cloned.
-    pub fn items_mut(&mut self) -> &mut ArenaItems<I, T, A> { &mut self.items }
+    pub fn items_mut(&mut self) -> &mut ArenaItems<I, T> { &mut self.items }
 
     /// Reserves capacity for at least one more element.
     /// The collection may reserve more space to avoid frequent reallocations.
@@ -709,46 +693,6 @@ impl<I: ArenaIndex, T, A: Allocator> Arena<I, T, A> {
         if self.items().len_equals_to_min_capacity() {
             self.items_mut().reserve_exact(1);
             assert!(I::try_from_usize(self.items().min_capacity()).is_some());
-        }
-    }
-
-    /// Tries to reserve capacity for at least one more element.
-    /// The collection may reserve more space to avoid frequent reallocations.
-    /// After calling `try_reserve`, capacity will be greater than or equal
-    /// to `self.items().len() + 1`. Does nothing if capacity is already sufficient.
-    ///
-    /// # Errors
-    ///
-    /// If the capacity overflows, or the allocator reports a failure, then an error is returned.
-    pub fn try_reserve(&mut self) -> Result<(), TryReserveError> {
-        if self.items().len_equals_to_min_capacity() {
-            self.items_mut().try_reserve(1)?;
-            I::try_from_usize(self.items().min_capacity())
-                .ok_or(TryReserveError::from(TryReserveErrorKind::CapacityOverflow)).map(|_| ())
-        } else {
-            Ok(())
-        }
-    }
-
-    /// Tries to reserve capacity for exactly one more element.
-    /// The collection may reserve more space to avoid frequent reallocations.
-    /// After calling `try_reserve_exact`, capacity will be greater than or equal
-    /// to `self.items().len() + 1`. Does nothing if capacity is already sufficient.
-    ///
-    /// Note that the allocator may give the collection more space than it requests.
-    /// Therefore, capacity can not be relied upon to be precisely minimal.
-    /// Prefer [`try_reserve`](Arena::try_reserve) if future insertions are expected.
-    ///
-    /// # Errors
-    ///
-    /// If the capacity overflows, or the allocator reports a failure, then an error is returned.
-    pub fn try_reserve_exact(&mut self) -> Result<(), TryReserveError> {
-        if self.items().len_equals_to_min_capacity() {
-            self.items_mut().try_reserve_exact(1)?;
-            I::try_from_usize(self.items().min_capacity())
-                .ok_or(TryReserveError::from(TryReserveErrorKind::CapacityOverflow)).map(|_| ())
-        } else {
-            Ok(())
         }
     }
 
@@ -798,11 +742,11 @@ impl<I: ArenaIndex, T, A: Allocator> Arena<I, T, A> {
     }
 }
 
-impl<I: ArenaIndex, T, A: Allocator> Default for Arena<I, T, A> where A: ConstDefault {
+impl<I: ArenaIndex, T> Default for Arena<I, T> {
     fn default() -> Self { Arena::new() }
 }
 
-impl<I: ArenaIndex, T, A: Allocator> Index<I> for Arena<I, T, A> {
+impl<I: ArenaIndex, T> Index<I> for Arena<I, T> {
     type Output = T;
 
     fn index(&self, index: I) -> &T {
@@ -810,7 +754,7 @@ impl<I: ArenaIndex, T, A: Allocator> Index<I> for Arena<I, T, A> {
     }
 }
 
-impl<I: ArenaIndex, T, A: Allocator> IndexMut<I> for Arena<I, T, A> {
+impl<I: ArenaIndex, T> IndexMut<I> for Arena<I, T> {
     fn index_mut(&mut self, index: I) -> &mut T {
         self.items.vec[I::try_to_usize(index).expect("invalid index")].as_mut().right().expect("invalid index")
     }
