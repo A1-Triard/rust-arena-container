@@ -2,16 +2,22 @@ use core::fmt::Debug;
 use core::num::{NonZeroU8, NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU128, NonZeroUsize};
 
 pub trait ArenaIndex: Copy + Debug where Self: Sized {
+    #[doc(hidden)]
     type Optional: Copy + Debug;
 
+    #[doc(hidden)]
     const NONE: Self::Optional;
 
+    #[doc(hidden)]
     fn try_from_usize(x: usize) -> Option<Self>;
 
+    #[doc(hidden)]
     fn try_to_usize(x: Self) -> Option<usize>;
 
+    #[doc(hidden)]
     fn to_option(x: Self::Optional) -> Option<Self>;
 
+    #[doc(hidden)]
     fn some(x: Self) -> Self::Optional;
 }
 
